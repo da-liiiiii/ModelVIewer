@@ -243,6 +243,42 @@ bool intersectRayAABB(const QVector3D &O, const QVector3D &D,
     return true;
 }
 
+// 射线与三角形求交（Möller–Trumbore）。O=射线原点，D=方向（已归一化 → t 即距离），
+// v0/v1/v2=三角形三顶点（逆时针）。命中返回 true，距离写进 outT。
+// 原理：解 [ -D, e1, e2 ]·[t,u,v]ᵀ = O-v0，用点/叉乘（=3×3 行列式）展开 Cramer 法则，
+//       一次得到距离 t 与重心坐标 u,v；u≥0 且 v≥0 且 u+v≤1 即落在三角形内部。
+bool intersectRayTriangle(const QVector3D &O, const QVector3D &D,
+                          const QVector3D &v0, const QVector3D &v1, const QVector3D &v2,
+                          float &outT)
+{
+    const QVector3D edge1 = v1 - v0;
+    const QVector3D edge2 = v2 - v0;
+
+    const QVector3D h = QVector3D::crossProduct(D, edge2);   // pvec = D × e2
+    const float a = QVector3D::dotProduct(edge1, h);          // det = e1 · (D×e2)
+    if (std::abs(a) < 1e-8f)
+        return false;   // det≈0 → 射线与三角形所在平面平行（或三角形退化）
+
+    const float f = 1.0f / a;
+    const QVector3D s = O - v0;                               // tvec = O − v0
+
+    const float u = f * QVector3D::dotProduct(s, h);
+    if (u < 0.0f || u > 1.0f)
+        return false;   // 交点落在边 e1 的错误一侧
+
+    const QVector3D q = QVector3D::crossProduct(s, edge1);    // qvec = s × e1
+    const float v = f * QVector3D::dotProduct(D, q);
+    if (v < 0.0f || u + v > 1.0f)
+        return false;   // 交点落在边 e2 的错误一侧，或越过 v0→v1 对角边
+
+    const float t = f * QVector3D::dotProduct(edge2, q);
+    if (t < 1e-6f)
+        return false;   // 交点在射线起点背后（t≤0，几乎为 0）
+
+    outT = t;
+    return true;
+}
+
 } // namespace
 
 GLWidget::GLWidget(QWidget *parent)
@@ -525,10 +561,36 @@ void GLWidget::mousePressEvent(QMouseEvent *event)
             if (intersectRayAABB(localOrigin, localDir,
                                  m_models[i]->aabbMin(), m_models[i]->aabbMax(), t))
             {
-                if (selectedIndex < 0 || t < nearestT) // 命中，且比之前更近
+                // === 旧写法（保留对照）：AABB 命中就直接选中 ===
+                // if (selectedIndex < 0 || t < nearestT) // 命中，且比之前更近
+                // {
+                //     selectedIndex = i;
+                //     nearestT = t;
+                // }
+
+                // === 新写法：AABB 只当粗筛，命中后再逐三角形精测 ===
+                // 注意：AABB 的 t 是"进入包围盒"的距离，真正的表面在盒内更远处，
+                // 所以 bestT 要从 +∞ 起算，不能从 t 起算（t 一定 ≤ 表面距离）。
+                float bestT = std::numeric_limits<float>::infinity();
+                bool hit = false;
+                const std::vector<QVector3D> &tris = m_models[i]->triangles();
+                for (int j = 0; j + 2 < (int)tris.size(); j += 3)
+                {
+                    float tt = 0.0f;
+                    if (intersectRayTriangle(localOrigin, localDir,
+                                             tris[j], tris[j + 1], tris[j + 2], tt))
+                    {
+                        if (!hit || tt < bestT)   // 取本模型内最近的三角面
+                        {
+                            hit = true;
+                            bestT = tt;
+                        }
+                    }
+                }
+                if (hit && (selectedIndex < 0 || bestT < nearestT))
                 {
                     selectedIndex = i;
-                    nearestT = t;
+                    nearestT = bestT;
                 }
             }
         }
