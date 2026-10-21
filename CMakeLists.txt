@@ -17,6 +17,7 @@ find_package(OpenGL REQUIRED)
 
 add_executable(ModelViewer
     main.cpp
+    resources.qrc
     mainwindow.h
     mainwindow.cpp
     glwidget.h

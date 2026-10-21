@@ -1,0 +1,76 @@
+/* ===== 全局深色主题 =====
+ * QSS（Qt Style Sheets）语法类似 CSS，只影响绘制外观，不影响布局与交互逻辑。
+ * 橙色 #e08a00 与视口里"选中高亮"的颜色保持一致。
+ */
+
+/* 主窗口整体背景 */
+QMainWindow {
+    background-color: #2b2b2b;
+}
+
+/* 顶部工具栏 */
+QToolBar {
+    background-color: #333333;
+    border-bottom: 1px solid #1e1e1e;
+    padding: 4px;
+    spacing: 4px;
+}
+
+QToolBar QToolButton {
+    color: #e6e6e6;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #4a4a4a;
+    border: 1px solid #555555;
+}
+
+QToolBar QToolButton:pressed {
+    background-color: #3a3a3a;
+}
+
+/* 左侧"模型列表"停靠面板 */
+QDockWidget {
+    background-color: #323131;
+    color: #e6e6e6;
+}
+
+QDockWidget::title {
+    background-color: #484848;
+    padding: 6px;
+    border-bottom: 1px solid #2e2e2e;
+}
+
+QListWidget {
+    background-color: #353535;
+    border: none;
+    color: #e6e6e6;
+}
+
+QListWidget::item {
+    padding: 1px;
+}
+
+QListWidget::item:hover {
+    background-color: #505050;
+}
+
+QListWidget::item:selected {
+    background-color: #887962;
+    color: #ffffff;
+}
+
+/* 底部状态栏 */
+QStatusBar {
+    background-color: #333333;
+    color: #b0b0b0;
+    border-top: 1px solid #1e1e1e;
+}
+
+QStatusBar QLabel {
+    color: #b0b0b0;
+}
