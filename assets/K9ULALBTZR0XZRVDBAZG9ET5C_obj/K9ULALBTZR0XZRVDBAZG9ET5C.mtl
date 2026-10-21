@@ -1,0 +1,189 @@
+
+newmtl N00_000_00_FaceMouth_00_FACE_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_FaceMouth_00_FACE_(Instance).png
+
+newmtl N00_000_00_EyeIris_00_EYE_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_EyeIris_00_EYE_(Instance).png
+
+newmtl N00_000_00_Face_00_SKIN_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_Face_00_SKIN_(Instance).png
+
+newmtl N00_000_00_EyeWhite_00_EYE_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_EyeWhite_00_EYE_(Instance).png
+
+newmtl N00_000_00_FaceBrow_00_FACE_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_FaceBrow_00_FACE_(Instance).png
+
+newmtl N00_000_00_FaceEyeline_00_FACE_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_FaceEyeline_00_FACE_(Instance).png
+
+newmtl N00_000_00_Body_00_SKIN_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_Body_00_SKIN_(Instance).png
+
+newmtl N00_010_01_Onepiece_00_CLOTH_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_010_01_Onepiece_00_CLOTH_(Instance).png
+
+newmtl N00_000_00_HairBack_00_HAIR_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_00_HairBack_00_HAIR_(Instance).png
+
+newmtl N00_001_01_Shoes_01_CLOTH_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_001_01_Shoes_01_CLOTH_(Instance).png
+
+newmtl N00_007_02_Accessory_Tie_01_CLOTH_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_007_02_Accessory_Tie_01_CLOTH_(Instance).png
+
+newmtl N00_007_02_Tops_01_CLOTH_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_007_02_Tops_01_CLOTH_(Instance).png
+
+newmtl N00_001_03_Bottoms_01_CLOTH_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_001_03_Bottoms_01_CLOTH_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_01_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_01_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_02_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_02_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_03_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_03_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_04_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_04_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_05_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_05_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_06_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_06_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_07_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_07_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_08_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_08_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_09_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_09_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_10_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_10_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_11_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_11_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_12_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_12_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_13_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_13_(Instance).png
+
+newmtl N00_000_Hair_00_HAIR_14_(Instance)
+Tr 0.0001
+Kd 1 1 1
+Ke 0 0 0
+Ks 0 0 0
+map_Kd N00_000_Hair_00_HAIR_14_(Instance).png
