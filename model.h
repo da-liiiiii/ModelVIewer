@@ -15,7 +15,7 @@
 class Model
 {
 public:
-    QString name() {return m_name;};
+    QString name() const { return m_name; };
     void setName(const QString& name) {m_name = name;};
     std::vector<std::unique_ptr<Mesh>>& meshes(){return m_meshes;};
     //void setMesh(std::vector<std::unique_ptr<Mesh>> meshes);

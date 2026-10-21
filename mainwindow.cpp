@@ -1,7 +1,9 @@
 #include "mainwindow.h"
 
 #include <QAction>
+#include <QDockWidget>
 #include <QFileDialog>
+#include <QListWidget>
 #include <QStatusBar>
 #include <QToolBar>
 
@@ -22,7 +24,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(openAction, &QAction::triggered, this, &MainWindow::openModel);
     QAction *addAction = new QAction("添加模型", this);
     connect(addAction, &QAction::triggered, this, &MainWindow::onAddModel);
-    QAction *resetAction = new QAction("复位", this);
+    QAction *resetAction = new QAction("重置视角", this);
     connect(resetAction, &QAction::triggered, this, &MainWindow::onResetCameraStatus);
 
 
@@ -31,6 +33,19 @@ MainWindow::MainWindow(QWidget *parent)
     toolBar->addAction(openAction);
     toolBar->addAction(addAction);
     toolBar->addAction(resetAction);
+
+    // 左侧“模型列表”停靠面板（第 1 步：只读，点击选中留到下一步）
+    QDockWidget *listDock = new QDockWidget("模型列表", this);
+    m_modelList = new QListWidget(listDock);
+    listDock->setWidget(m_modelList);
+    addDockWidget(Qt::LeftDockWidgetArea, listDock);
+
+    // 模型增删/重载 → 刷新列表
+    connect(m_glWidget, &GLWidget::modelsChanged, this, &MainWindow::refreshModelList);
+    // 视口点选模型 → 列表高亮对应项
+    connect(m_glWidget, &GLWidget::selectionChanged, this, &MainWindow::onGLSelectionChanged);
+    connect(m_modelList, &QListWidget::itemClicked, this, &MainWindow::onListSelectionChanged);
+    refreshModelList(); // 启动先刷一次（此时默认立方体还没建，列表为空正常）
 
     statusBar()->showMessage("就绪");
 }
@@ -62,4 +77,23 @@ void MainWindow::onAddModel()
 void MainWindow::onResetCameraStatus()
 {
     m_glWidget->resetCameraStatus();
+}
+
+void MainWindow::refreshModelList()
+{
+    m_modelList->clear();
+    m_modelList->addItems(m_glWidget->modelNames());
+    m_modelList->setCurrentRow(m_glWidget->selectedIndex()); // 重建后恢复高亮
+}
+
+void MainWindow::onGLSelectionChanged(int index)
+{
+    m_modelList->setCurrentRow(index);
+}
+
+void MainWindow::onListSelectionChanged(QListWidgetItem *item)
+{
+    if(!item)
+        return;
+    m_glWidget->changeSelection(m_modelList->row(item));
 }

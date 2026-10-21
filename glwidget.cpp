@@ -1,6 +1,7 @@
 #include "glwidget.h"
 
 #include <QDebug>
+#include <QFileInfo>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QVector2D>
@@ -279,6 +280,51 @@ bool intersectRayTriangle(const QVector3D &O, const QVector3D &D,
     return true;
 }
 
+// 由世界空间 AABB 算出"自动取景"的相机参数。
+// target = 盒子中心；distance = 外接球半径 / sin(半视场角)，
+// 使盒子外接球刚好收进垂直视锥（模型整体必然在球内，故也一定在画面里）。
+void computeHomeView(const QVector3D &min, const QVector3D &max,
+                     QVector3D &outTarget, float &outDistance)
+{
+    outTarget = (min + max) * 0.5f;                    // 盒子中心
+    const float radius = (max - min).length() * 0.5f;  // 外接球半径 = 对角线的一半
+    const float halfFov = qDegreesToRadians(45.0f * 0.5f); // 与 resizeGL 的 perspective(45°) 一致
+    outDistance = radius / std::sin(halfFov);
+}
+
+// 合并所有模型的"世界空间"AABB。模型存的 aabbMin/Max 是局部空间，
+// 必须把 8 个角点经 getMatrix() 变换到世界空间再取并集，平移/旋转/缩放才正确。
+void computeSceneAabb(const std::vector<std::unique_ptr<Model>> &models,
+                      QVector3D &outMin, QVector3D &outMax)
+{
+    const float inf = std::numeric_limits<float>::infinity();
+    outMin = QVector3D(inf, inf, inf);
+    outMax = QVector3D(-inf, -inf, -inf);
+
+    for (const auto &model : models)
+    {
+        const QMatrix4x4 m = model->getMatrix();
+        const QVector3D lo = model->aabbMin();
+        const QVector3D hi = model->aabbMax();
+
+        // 8 个角点 = 三轴各取 lo/hi 的组合（x,y,z 分别取 0=lo / 1=hi）
+        for (int x = 0; x < 2; ++x)
+        for (int y = 0; y < 2; ++y)
+        for (int z = 0; z < 2; ++z)
+        {
+            const QVector3D corner = m.map(QVector3D(x ? hi.x() : lo.x(),
+                                                      y ? hi.y() : lo.y(),
+                                                      z ? hi.z() : lo.z()));
+            outMin.setX(qMin(outMin.x(), corner.x()));
+            outMin.setY(qMin(outMin.y(), corner.y()));
+            outMin.setZ(qMin(outMin.z(), corner.z()));
+            outMax.setX(qMax(outMax.x(), corner.x()));
+            outMax.setY(qMax(outMax.y(), corner.y()));
+            outMax.setZ(qMax(outMax.z(), corner.z()));
+        }
+    }
+}
+
 } // namespace
 
 GLWidget::GLWidget(QWidget *parent)
@@ -310,6 +356,7 @@ bool GLWidget::loadModel(const QString &path)
 
     m_models.push_back(std::make_unique<Model>());
     Model *model = m_models.back().get();
+    model->setName(QFileInfo(path).baseName());   // 列表里显示文件名
     for (const SubMesh &s : subMeshes)
     {
         //m_meshes.push_back(std::make_unique<Mesh>());
@@ -346,20 +393,10 @@ bool GLWidget::loadModel(const QString &path)
 
     //update();
     resetCameraStatus();
+    emit modelsChanged();   // 通知主窗口刷新模型列表
     return true;
 }
 
-void GLWidget::resetCameraStatus()
-{
-    // TODO(包围盒)：下面四个是写死的初始值。等做了包围盒自动取景后，
-    // 应改成恢复到 loadModel 里算出的“本模型 home 值”（如 m_homeTarget/m_homeDistance），
-    // 而不是固定回到原点 + 固定距离。
-    m_yaw      = 0.0f;
-    m_pitch    = 0.0f;
-    m_distance = 5.0f;               // 和头文件里 m_distance 的默认值一致
-    m_target   = QVector3D(0, 0, 0); // 回到原点
-    update();                        // 请求重绘
-}
 
 bool GLWidget::addModel(const QString &path)
 {
@@ -382,6 +419,7 @@ bool GLWidget::addModel(const QString &path)
 
     m_models.push_back(std::make_unique<Model>());
     Model *model = m_models.back().get();
+    model->setName(QFileInfo(path).baseName());   // 列表里显示文件名
     model->setPosition(QVector3D(0.5, 0.5, 0));
     for (const SubMesh &s : subMeshes)
     {
@@ -418,6 +456,7 @@ bool GLWidget::addModel(const QString &path)
     doneCurrent();
 
     update();
+    emit modelsChanged();   // 通知主窗口刷新模型列表
     return true;
 }
 
@@ -427,6 +466,41 @@ const Material *GLWidget::findMaterial(const QString &name) const
         if (m.name == name)
             return &m;
     return nullptr;
+}
+
+QStringList GLWidget::modelNames() const
+{
+    QStringList names;
+    for (const auto &model : m_models)
+        names << model->name();
+    return names;
+}
+
+
+void GLWidget::resetCameraStatus()
+{
+    // === 自动取景：按所有模型的世界空间 AABB 算 target/distance ===
+    m_yaw   = 0.0f;
+    m_pitch = 0.0f;
+
+    // === 旧写法（保留对照）：固定回到原点 + 固定距离 ===
+    // m_distance = 5.0f;               // 和头文件里 m_distance 的默认值一致
+    // m_target   = QVector3D(0, 0, 0); // 回到原点
+
+    if (m_models.empty())
+    {
+        // 场景还没加载模型：退回旧写法的固定值
+        m_distance = 5.0f;
+        m_target   = QVector3D(0, 0, 0);
+    }
+    else
+    {
+        QVector3D sceneMin, sceneMax;
+        computeSceneAabb(m_models, sceneMin, sceneMax);
+        computeHomeView(sceneMin, sceneMax, m_target, m_distance);
+    }
+
+    update();   // 请求重绘
 }
 
 QVector3D GLWidget::screenToWorldRay(const QPoint &screenPos, QVector3D &outDirection) const
@@ -462,8 +536,13 @@ void GLWidget::initializeGL()
     QVector<float> cube;
     generateCube(cube);
     m_models.push_back(std::make_unique<Model>());
+    m_models.back()->setName("Cube");   // 默认立方体也要有名字，否则列表空白
     m_models.back()->meshes().push_back(std::make_unique<Mesh>());
     m_models.back()->meshes().back()->upload(this, cube);
+    m_distance = 5.0f;
+    m_yaw   = -45.0f;
+    m_pitch = 30.0f;
+    emit modelsChanged();   // 默认模型建好了，通知主窗口刷新列表
 }
 
 void GLWidget::resizeGL(int w, int h)
@@ -510,6 +589,7 @@ void GLWidget::paintGL()
     m_program.setUniformValue("uViewPos", eye);             // 相机位置，用于高光
     m_program.setUniformValue("uTex", 0);                   // 贴图固定用纹理单元 0
 
+
     // 逐个模型绘制：外层每模型设 uM/uSelected，内层每材质设颜色/贴图
     for (int i = 0; i < int(m_models.size()); ++i)
     {
@@ -536,6 +616,15 @@ void GLWidget::paintGL()
     }
     
     m_program.release();
+}
+
+void GLWidget::changeSelection(int index)
+{
+    if (index == m_selectedIndex)
+        return;              // 没变化就不用重绘
+    m_selectedIndex = index;
+
+    update();                // 立刻重绘，让高亮生效
 }
 
 void GLWidget::mousePressEvent(QMouseEvent *event)
@@ -597,6 +686,7 @@ void GLWidget::mousePressEvent(QMouseEvent *event)
 
         m_selectedIndex = selectedIndex;   // 存进成员：供 paintGL 高亮 + 以后移动用
         update();                          // 选中状态变了，立刻请求重绘（否则要等下次拖动才高亮）
+        emit selectionChanged(m_selectedIndex); // 通知主窗口：同步列表高亮
 
         if (selectedIndex >= 0)
             qDebug() << "[Pick] selected model" << selectedIndex << "distance =" << nearestT;

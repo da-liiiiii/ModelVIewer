@@ -6,6 +6,7 @@
 #include <QOpenGLWidget>
 #include <QPoint>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <memory>
 #include <vector>
@@ -29,6 +30,15 @@ public:
     bool loadModel(const QString &path);
     void resetCameraStatus();
     bool addModel(const QString &path);
+
+    // 供主窗口“模型列表”面板读取模型名（第 1 步：只读列表）
+    QStringList modelNames() const;
+    int selectedIndex() const { return m_selectedIndex; }
+    void changeSelection(int index);
+
+signals:
+    void modelsChanged();             // 模型增删/重载后发出 → 主窗口刷新列表
+    void selectionChanged(int index); // 选中变化（-1 = 取消选中）
 
 protected:
     void initializeGL() override;
