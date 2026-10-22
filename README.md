@@ -32,9 +32,16 @@
 ### 步骤
 
 ```bash
-cmake -B build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
+
+构建类型二选一（`-DCMAKE_BUILD_TYPE`）：
+
+| 类型 | 配置命令 | 说明 |
+|---|---|---|
+| Release | `cmake -B build -DCMAKE_BUILD_TYPE=Release` | 优化构建，无控制台窗口（发布 / 分发用） |
+| Debug | `cmake -B build -DCMAKE_BUILD_TYPE=Debug` | 保留控制台窗口，便于查看调试输出 |
 
 若 Qt6 不在默认搜索路径，需指定：
 
