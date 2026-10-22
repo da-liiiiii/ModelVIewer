@@ -30,6 +30,7 @@ public:
     void rotateAroundWorldAxis(const QVector3D &axis, float angleDeg)
     { m_rotation = QQuaternion::fromAxisAndAngle(axis, angleDeg) * m_rotation; }
     void setScale(QVector3D scale) {m_scale = scale;};
+    QVector3D scale() const { return m_scale; };   // 读取缩放（属性面板显示用）
     // 局部空间 AABB：由顶点位置算出的最小/最大坐标（尚未经过 position/rotation/scale）
     QVector3D aabbMin() const { return m_aabbMin; }
     QVector3D aabbMax() const { return m_aabbMax; }

@@ -360,6 +360,38 @@ QVector<float> generateRing(const QVector3D &axis, float radius, int segments)
     return out;
 }
 
+// 地面网格参数：覆盖范围 ±kGridHalf、线间距 kGridStep。
+// 网格用"有限网格 + 跟随相机对齐"实现无限效果，见 paintGL 里的 snap 逻辑。
+constexpr float kGridHalf = 50.0f;
+constexpr float kGridStep = 1.0f;
+
+// 生成地面网格（GL_LINES）：躺在 XZ 平面（y=0）上，覆盖 [-half,+half]、间距 step。
+// 两组平行线：沿 X 方向（固定 z）与沿 Z 方向（固定 x），拼成方格。
+// 顶点仍是 8 float 交错；normal 填 (0,1,0)、uv 填 0（unlit 下用不到）。
+QVector<float> generateGrid(float half, float step)
+{
+    QVector<float> out;
+
+    auto addVertex = [&out](const QVector3D &p)
+    {
+        out.append(p.x()); out.append(p.y()); out.append(p.z());
+        out.append(0.0f); out.append(1.0f); out.append(0.0f);  // normal = +Y
+        out.append(0.0f); out.append(0.0f);                    // uv 不用
+    };
+
+    // 用整数循环算网格线坐标，避免浮点累加误差（保证两端 -half 和 +half 都有线）
+    const int n = int(std::floor(half / step + 1e-4f));
+    for (int i = -n; i <= n; ++i)
+    {
+        const float c = i * step;
+        addVertex(QVector3D(-half, 0.0f, c));   // 沿 X 方向的线（固定 z）
+        addVertex(QVector3D( half, 0.0f, c));
+        addVertex(QVector3D(c, 0.0f, -half));   // 沿 Z 方向的线（固定 x）
+        addVertex(QVector3D(c, 0.0f,  half));
+    }
+    return out;
+}
+
 } // namespace
 
 GLWidget::GLWidget(QWidget *parent)
@@ -511,12 +543,20 @@ QStringList GLWidget::modelNames() const
     return names;
 }
 
+Model *GLWidget::selectedModel() const
+{
+    // 无选中（-1）或下标越界 → 返回 nullptr
+    if (m_selectedIndex < 0 || m_selectedIndex >= int(m_models.size()))
+        return nullptr;
+    return m_models[m_selectedIndex].get();
+}
+
 
 void GLWidget::resetCameraStatus()
 {
     // === 自动取景：按所有模型的世界空间 AABB 算 target/distance ===
-    m_yaw   = 0.0f;
-    m_pitch = 0.0f;
+    m_yaw   = -45.0f;
+    m_pitch = 30.0f;
 
     // === 旧写法（保留对照）：固定回到原点 + 固定距离 ===
     // m_distance = 5.0f;               // 和头文件里 m_distance 的默认值一致
@@ -593,6 +633,10 @@ void GLWidget::initializeGL()
         m_gizmoAxes[i].mesh  = std::make_unique<Mesh>();
         m_gizmoAxes[i].mesh->upload(this, generateRing(defs[i].axis, 1.0f, 64));
     }
+
+    // === 地面网格：XZ 平面上的线框，范围 ±50、间距 1（静态几何，上传一次）===
+    m_gridMesh = std::make_unique<Mesh>();
+    m_gridMesh->upload(this, generateGrid(kGridHalf, kGridStep));
 }
 
 void GLWidget::resizeGL(int w, int h)
@@ -639,6 +683,23 @@ void GLWidget::paintGL()
     m_program.setUniformValue("uViewPos", eye);             // 相机位置，用于高光
     m_program.setUniformValue("uTex", 0);                   // 贴图固定用纹理单元 0
 
+    // === 地面网格：画在最前面。深度测试开着，模型会自动盖在它上面 ===
+    // "跟随相机 + 对齐网格"：把有限网格平移到相机脚下，并对齐到 kGridStep 的整数倍。
+    // 对齐后网格线始终落在世界空间整数坐标上——相机移动时线纹丝不动，看起来就是无限网格；
+    // 有限网格只是跟着相机挪，保证边缘永远在视野外。unlit 纯灰，不参与光照。
+    if (m_gridMesh)
+    {
+        const float snapX = std::floor(eye.x() / kGridStep) * kGridStep;
+        const float snapZ = std::floor(eye.z() / kGridStep) * kGridStep;
+        QMatrix4x4 gridM;
+        gridM.translate(snapX, 0.0f, snapZ);
+        m_program.setUniformValue("uM", gridM);
+        m_program.setUniformValue("uSelected", 0);
+        m_program.setUniformValue("uUnlit", 1);
+        m_program.setUniformValue("uHasTexture", 0);
+        m_program.setUniformValue("uDiffuseColor", QVector3D(0.35f, 0.35f, 0.38f)); // 灰色
+        m_gridMesh->draw(this, GL_LINES);
+    }
 
     // 逐个模型绘制：外层每模型设 uM/uSelected，内层每材质设颜色/贴图
     for (int i = 0; i < int(m_models.size()); ++i)
@@ -703,6 +764,29 @@ void GLWidget::changeSelection(int index)
     m_selectedIndex = index;
 
     update();                // 立刻重绘，让高亮生效
+}
+
+// 删除指定下标的模型。删除前要先 makeCurrent：unique_ptr 析构 Model→Mesh，
+// 销毁 VAO/VBO/纹理时需要当前 OpenGL 上下文，否则会告警甚至资源泄漏。
+void GLWidget::removeModel(int index)
+{
+    if (index < 0 || index >= int(m_models.size()))
+        return;
+
+    makeCurrent();
+    m_models.erase(m_models.begin() + index);
+    doneCurrent();
+
+    // 修正选中下标：删的是选中项 → 取消选中；删的是它前面的项 → 下标左移一位
+    if (index == m_selectedIndex)
+        m_selectedIndex = -1;
+    else if (index < m_selectedIndex)
+        --m_selectedIndex;
+
+    m_activeGizmoAxis = -1;   // 正在拖的 Gizmo 作废
+
+    emit modelsChanged();     // 主窗口刷新列表并恢复高亮（refreshModelList 会 setCurrentRow）
+    update();
 }
 
 // 把世界坐标投影到屏幕像素（用当前 view/projection，与 paintGL 里 uVP 一致）。
@@ -836,6 +920,7 @@ void GLWidget::mousePressEvent(QMouseEvent *event)
         m_selectedIndex = selectedIndex;   // 存进成员：供 paintGL 高亮 + 以后移动用
         update();                          // 选中状态变了，立刻请求重绘（否则要等下次拖动才高亮）
         emit selectionChanged(m_selectedIndex); // 通知主窗口：同步列表高亮
+        
 
         if (selectedIndex >= 0)
             qDebug() << "[Pick] selected model" << selectedIndex << "distance =" << nearestT;
@@ -919,7 +1004,10 @@ void GLWidget::mouseMoveEvent(QMouseEvent *event)
         const float angleRad = std::atan2(crossZ, dotVal);
 
         if (std::abs(angleRad) > 1e-5f)   // 鼠标真动了才转，避免抖动
+        {
             model->rotateAroundWorldAxis(axis, qRadiansToDegrees(angleRad));
+            emit modelTransformEdited();   // 通知主窗口：属性面板里的旋转数值要跟着刷新
+        }
 
         m_lastMousePos = event->pos();
     }
@@ -943,6 +1031,7 @@ void GLWidget::mouseMoveEvent(QMouseEvent *event)
         newPos += right * delta.x() * worldPerPixel;   // 右移
         newPos -= up    * delta.y() * worldPerPixel;   // 下移
         m_models[m_selectedIndex]->setPosition(newPos);
+        emit modelTransformEdited();   // 通知主窗口：属性面板里的位置数值要跟着刷新
 
     }
 

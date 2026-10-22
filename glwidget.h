@@ -45,10 +45,13 @@ public:
     QStringList modelNames() const;
     int selectedIndex() const { return m_selectedIndex; }
     void changeSelection(int index);
+    void removeModel(int index);   // 删除指定下标的模型（供主窗口"模型列表"右键删除）
+    Model *selectedModel() const;  // 当前选中模型（供右侧"属性"面板读写变换）；无选中返回 nullptr
 
 signals:
     void modelsChanged();             // 模型增删/重载后发出 → 主窗口刷新列表
     void selectionChanged(int index); // 选中变化（-1 = 取消选中）
+    void modelTransformEdited();      // 视口拖拽/Gizmo 旋转改了选中模型变换 → 主窗口刷新属性面板
 
 protected:
     void initializeGL() override;
@@ -101,4 +104,6 @@ private:
     QPoint m_lastMousePos;    // 上次鼠标位置，用于计算拖动增量
 
     GizmoAxis m_gizmoAxes[3]; // 旋转 Gizmo 的三根轴（X/Y/Z），initializeGL 里建好
+
+    std::unique_ptr<Mesh> m_gridMesh; // 地面网格（XZ 平面线框，initializeGL 里建好）
 };
