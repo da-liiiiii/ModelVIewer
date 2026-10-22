@@ -32,6 +32,11 @@ add_executable(ModelViewer
     mtlloader.cpp
 )
 
+# Debug 保留控制台窗口（方便 qDebug/printf 输出）；其余（含 Release）用 WIN32 去掉控制台
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set_target_properties(ModelViewer PROPERTIES WIN32_EXECUTABLE ON)
+endif()
+
 target_link_libraries(ModelViewer PRIVATE
     Qt6::Widgets
     Qt6::OpenGLWidgets

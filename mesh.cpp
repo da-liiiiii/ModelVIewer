@@ -74,7 +74,9 @@ bool Mesh::loadTexture(const QString &path)
     img = img.convertToFormat(QImage::Format_RGBA8888);
     // 垂直翻转：QImage 像素原点在左上角，OpenGL 纹理坐标原点在左下角，
     // 不翻转贴图会上下颠倒。
-    img = img.mirrored();
+    //img = img.mirrored();
+    img = img.flipped(Qt::Vertical);   // 效果和 mirrored() 默认一样：垂直翻转
+
 
     m_texture = std::make_unique<QOpenGLTexture>(img, QOpenGLTexture::DontGenerateMipMaps);
     m_texture->setMinificationFilter(QOpenGLTexture::Linear);
