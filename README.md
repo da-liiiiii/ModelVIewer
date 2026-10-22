@@ -1,8 +1,6 @@
 # ModelViewer
 
 基于 Qt6 + OpenGL 3.3 Core Profile 的 3D 模型查看器。支持 OBJ/MTL 模型加载、多模型场景管理、射线拾取选中、拖拽移动与轨道相机。
-
-<!-- 替换为你的截图 / GIF -->
 ![主界面](docs/screenshot-main.png)
 
 ## 功能特性
@@ -73,10 +71,6 @@ cmake -B build -DCMAKE_PREFIX_PATH=<Qt6 安装路径>
 | mesh.* | 单材质子网格：VAO/VBO/纹理 + draw |
 | objloader.* | OBJ 解析（按 usemtl 分组为 SubMesh） |
 | mtlloader.* | MTL 材质解析（Material：Kd、diffuseMap 等） |
-
-## 待办
-
-- 透明度（alpha 混合）
 
 ## 许可
 
