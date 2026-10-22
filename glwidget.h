@@ -5,6 +5,7 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLWidget>
 #include <QPoint>
+#include <QPointF>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -17,6 +18,15 @@
 
 class QMouseEvent;
 class QWheelEvent;
+
+// 旋转 Gizmo 的一根轴：一个单位半径圆环 Mesh + 它代表的世界轴 + 显示颜色。
+// 画的时候用 uM 平移到模型中心并缩放，所以这里只存"单位半径"的几何。
+struct GizmoAxis
+{
+    QVector3D axis;               // 世界空间单位轴（绕它旋转）
+    QVector3D color;              // 显示颜色（X红 / Y绿 / Z蓝）
+    std::unique_ptr<Mesh> mesh;   // 圆环（GL_LINES）
+};
 
 class GLWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core
 {
@@ -48,6 +58,7 @@ protected:
     // 鼠标交互：左键拖拽旋转、滚轮缩放
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -59,6 +70,7 @@ private:
     //std::vector<std::unique_ptr<Mesh>> m_meshes;
     std::vector<std::unique_ptr<Model>> m_models;
     int m_selectedIndex = -1; // 当前选中的模型下标；-1 = 未选中
+    int m_activeGizmoAxis = -1; // 正在拖拽的 Gizmo 轴（0/1/2）；-1 = 没在拖 Gizmo
     QVector<Material> m_materials; // 最近一次加载的材质表（阶段 4 查贴图用）
     QMatrix4x4 m_projection;
     QMatrix4x4 view;
@@ -69,6 +81,12 @@ private:
     // 把屏幕像素坐标转成世界空间射线（拾取用）。
     // 返回射线原点（近平面点），outDirection 输出方向（已归一化）。
     QVector3D screenToWorldRay(const QPoint &screenPos, QVector3D &outDirection) const;
+
+    // 把世界坐标投影到屏幕像素（用当前 view/projection）。相机背后的点返回"很远"。
+    QPointF worldToScreen(const QVector3D &worldPos) const;
+
+    // 拾取旋转 Gizmo：返回鼠标点中的轴（0=X/1=Y/2=Z），没点中返回 -1。
+    int pickGizmoAxis(const QPoint &screenPos) const;
 
     // 轨道相机参数
     float m_yaw = 0.0f;       // 左右环绕角（度），绕 Y 轴
@@ -81,4 +99,6 @@ private:
     QVector3D m_lightColor{1.0f, 1.0f, 1.0f};  // 光源颜色（白）
 
     QPoint m_lastMousePos;    // 上次鼠标位置，用于计算拖动增量
+
+    GizmoAxis m_gizmoAxes[3]; // 旋转 Gizmo 的三根轴（X/Y/Z），initializeGL 里建好
 };

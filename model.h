@@ -8,6 +8,7 @@
 #include <QVector>
 #include <QVector3D>
 #include <QMatrix4x4>
+#include <QQuaternion>
 
 #include <memory>
 #include "mesh.h"
@@ -21,7 +22,13 @@ public:
     //void setMesh(std::vector<std::unique_ptr<Mesh>> meshes);
     void setPosition(QVector3D position) {m_position = position;};
     QVector3D position() const { return m_position; };   // 读取位置（拾取/移动时用）
-    void setRotation(QVector3D rotation) {m_rotation = rotation;};
+    // 旋转改用四元数（绕任意轴、无万向锁）。旧欧拉角版本见下方注释。
+    QQuaternion rotation() const { return m_rotation; };
+    void setRotation(const QQuaternion &q) { m_rotation = q; };
+    // void setRotation(QVector3D rotation) {m_rotation = rotation;};   // 旧：欧拉角，已退役
+    // 绕"世界空间"轴再转 angleDeg 度。四元数左乘 = 绕世界轴；右乘才是绕局部轴。
+    void rotateAroundWorldAxis(const QVector3D &axis, float angleDeg)
+    { m_rotation = QQuaternion::fromAxisAndAngle(axis, angleDeg) * m_rotation; }
     void setScale(QVector3D scale) {m_scale = scale;};
     // 局部空间 AABB：由顶点位置算出的最小/最大坐标（尚未经过 position/rotation/scale）
     QVector3D aabbMin() const { return m_aabbMin; }
@@ -39,7 +46,8 @@ private:
     std::vector<std::unique_ptr<Mesh>> m_meshes;
     //QMatrix4x4 m_matrix;
     QVector3D m_position = QVector3D(0, 0, 0);
-    QVector3D m_rotation = QVector3D(0, 0, 0);
+    QQuaternion m_rotation;   // 旋转（四元数，默认构造 = 单位四元数 = 无旋转）
+    // QVector3D m_rotation = QVector3D(0, 0, 0);  // 旧：欧拉角，已退役
     QVector3D m_scale = QVector3D(1, 1, 1);
     QVector3D m_aabbMin;
     QVector3D m_aabbMax;

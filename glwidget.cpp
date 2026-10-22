@@ -51,6 +51,7 @@ uniform vec3 uViewPos;      // 相机位置，用于高光
 uniform sampler2D uTex;     // 漫反射贴图
 uniform int uHasTexture;    // 1 = 有贴图，0 = 无贴图
 uniform int uSelected;      // 1 = 该模型被选中（高亮）
+uniform int uUnlit;         // 1 = 不参与光照，直接输出物体色（Gizmo/辅助元素用）
 
 out vec4 fragColor;
 
@@ -81,6 +82,13 @@ void main()
         objectColor = texture(uTex, vUV).rgb;
     else
         objectColor = uDiffuseColor;
+
+    // 辅助元素（Gizmo 圆环等）：跳过光照，直接输出纯色，也不参与下方选中高亮
+    if (uUnlit == 1)
+    {
+        fragColor = vec4(objectColor, 1.0);
+        return;
+    }
 
     vec3 result = (ambient + diffuse + specular) * objectColor;
 
@@ -325,6 +333,33 @@ void computeSceneAabb(const std::vector<std::unique_ptr<Model>> &models,
     }
 }
 
+// 生成一个圆环（GL_LINES）：躺在垂直于 axis 的平面里、半径 radius、segments 段。
+// 顶点仍按 8 float 交错（pos xyz + normal xyz + uv xy），normal 填 axis、uv 填 0（unlit 下用不到）。
+QVector<float> generateRing(const QVector3D &axis, float radius, int segments)
+{
+    // 在垂直于 axis 的平面里找两个正交基 u、v
+    const QVector3D u = std::abs(axis.x()) < 0.9f
+        ? QVector3D::crossProduct(axis, QVector3D(1.0f, 0.0f, 0.0f)).normalized()
+        : QVector3D::crossProduct(axis, QVector3D(0.0f, 1.0f, 0.0f)).normalized();
+    const QVector3D v = QVector3D::crossProduct(axis, u);
+
+    constexpr float k2Pi = 6.28318530718f;   // 2π
+    QVector<float> out;
+    out.reserve(segments * 2 * 8);           // 每段一条边 = 2 顶点 × 8 float
+    for (int i = 0; i < segments; ++i)
+    {
+        const float a0 = k2Pi * i / segments;
+        const float a1 = k2Pi * (i + 1) / segments;
+        const QVector3D p0 = radius * (std::cos(a0) * u + std::sin(a0) * v);
+        const QVector3D p1 = radius * (std::cos(a1) * u + std::sin(a1) * v);
+        const float vtx0[8] = { p0.x(), p0.y(), p0.z(), axis.x(), axis.y(), axis.z(), 0.0f, 0.0f };
+        const float vtx1[8] = { p1.x(), p1.y(), p1.z(), axis.x(), axis.y(), axis.z(), 0.0f, 0.0f };
+        for (int k = 0; k < 8; ++k) out.append(vtx0[k]);
+        for (int k = 0; k < 8; ++k) out.append(vtx1[k]);
+    }
+    return out;
+}
+
 } // namespace
 
 GLWidget::GLWidget(QWidget *parent)
@@ -543,6 +578,21 @@ void GLWidget::initializeGL()
     m_yaw   = -45.0f;
     m_pitch = 30.0f;
     emit modelsChanged();   // 默认模型建好了，通知主窗口刷新列表
+
+    // === 旋转 Gizmo：三根世界轴的单位圆环（画时再平移到模型中心并缩放）===
+    // X红 / Y绿 / Z蓝（RGB 与 XYZ 对齐的惯例）。
+    const GizmoAxis defs[3] = {
+        { QVector3D(1, 0, 0), QVector3D(1.0f, 0.2f, 0.2f), nullptr },  // X 轴
+        { QVector3D(0, 1, 0), QVector3D(0.2f, 1.0f, 0.2f), nullptr },  // Y 轴
+        { QVector3D(0, 0, 1), QVector3D(0.3f, 0.4f, 1.0f), nullptr },  // Z 轴
+    };
+    for (int i = 0; i < 3; ++i)
+    {
+        m_gizmoAxes[i].axis  = defs[i].axis;
+        m_gizmoAxes[i].color = defs[i].color;
+        m_gizmoAxes[i].mesh  = std::make_unique<Mesh>();
+        m_gizmoAxes[i].mesh->upload(this, generateRing(defs[i].axis, 1.0f, 64));
+    }
 }
 
 void GLWidget::resizeGL(int w, int h)
@@ -596,6 +646,7 @@ void GLWidget::paintGL()
         const QMatrix4x4 m = m_models[i]->getMatrix();
         m_program.setUniformValue("uM", m);
         m_program.setUniformValue("uSelected", i == m_selectedIndex ? 1 : 0); // 每模型设一次
+        m_program.setUniformValue("uUnlit", 0);   // 默认参与光照；Gizmo 绘制时再临时设 1
         if(i == m_selectedIndex)
         {
             //绘制模型包围盒
@@ -613,6 +664,33 @@ void GLWidget::paintGL()
             m_program.setUniformValue("uHasTexture", mesh->hasTexture() ? 1 : 0);
             mesh->draw(this, GL_TRIANGLES);
         }
+
+        // 选中时，在模型之上画旋转 Gizmo（三根世界轴圆环，纯色不参与光照）
+        if (i == m_selectedIndex)
+        {
+            m_program.setUniformValue("uUnlit", 1);
+            m_program.setUniformValue("uHasTexture", 0);
+
+            // Gizmo 中心 = 模型原点；半径 ≈ 模型 AABB 外接球 × 1.2（无 AABB 时兜底 1.5）
+            const QVector3D diag = m_models[i]->aabbMax() - m_models[i]->aabbMin();
+            float radius = diag.length() * 0.5f * 1.2f;
+            if (radius < 1e-4f)
+                radius = 1.5f;
+
+            QMatrix4x4 gizmoM;
+            gizmoM.translate(m_models[i]->position());
+            gizmoM.scale(radius);
+
+            for (int k = 0; k < 3; ++k)
+            {
+                m_program.setUniformValue("uM", gizmoM);
+                // 正在拖拽的轴高亮成黄色，其它轴用各自颜色
+                m_program.setUniformValue("uDiffuseColor",
+                    k == m_activeGizmoAxis ? QVector3D(1.0f, 0.9f, 0.1f) : m_gizmoAxes[k].color);
+                if (m_gizmoAxes[k].mesh)
+                    m_gizmoAxes[k].mesh->draw(this, GL_LINES);
+            }
+        }
     }
     
     m_program.release();
@@ -627,11 +705,82 @@ void GLWidget::changeSelection(int index)
     update();                // 立刻重绘，让高亮生效
 }
 
+// 把世界坐标投影到屏幕像素（用当前 view/projection，与 paintGL 里 uVP 一致）。
+// 点在相机背后时返回一个"很远"的坐标，让距离判断天然判不中。
+QPointF GLWidget::worldToScreen(const QVector3D &worldPos) const
+{
+    const QVector4D clip = (m_projection * view) * QVector4D(worldPos, 1.0f);
+    if (clip.w() <= 0.0f)
+        return QPointF(1.0e9f, 1.0e9f);
+    const float ndcX = clip.x() / clip.w();
+    const float ndcY = clip.y() / clip.w();
+    return QPointF((ndcX * 0.5f + 0.5f) * width(),
+                   (1.0f - (ndcY * 0.5f + 0.5f)) * height());
+}
+
+// 拾取旋转 Gizmo：把选中模型的三根圆环投影到屏幕，看鼠标离哪根最近。
+// 命中阈值 24 像素；返回轴下标 0=X/1=Y/2=Z，没点中返回 -1。
+int GLWidget::pickGizmoAxis(const QPoint &screenPos) const
+{
+    if (m_selectedIndex < 0 || m_selectedIndex >= int(m_models.size()))
+        return -1;
+
+    const Model *model = m_models[m_selectedIndex].get();
+    const QVector3D center = model->position();
+    const QVector3D diag = model->aabbMax() - model->aabbMin();
+    float radius = diag.length() * 0.5f * 1.2f;
+    if (radius < 1e-4f)
+        radius = 1.5f;
+
+    int bestAxis = -1;
+    float bestDist = 24.0f;   // 12 像素内算点中
+    const int N = 64;         // 每根环采样 64 个点
+
+    for (int k = 0; k < 3; ++k)
+    {
+        const QVector3D axis = m_gizmoAxes[k].axis;
+        // 圆环所在平面的正交基（和 generateRing 同一套约定）
+        QVector3D u = std::abs(axis.x()) < 0.9f
+            ? QVector3D::crossProduct(axis, QVector3D(1, 0, 0)).normalized()
+            : QVector3D::crossProduct(axis, QVector3D(0, 1, 0)).normalized();
+        const QVector3D v = QVector3D::crossProduct(axis, u);
+
+        for (int i = 0; i < N; ++i)
+        {
+            const float a = 6.28318530718f * i / N;
+            const QVector3D p = center + radius * (std::cos(a) * u + std::sin(a) * v);
+            const QPointF s = worldToScreen(p);
+            const float dx = s.x() - screenPos.x();
+            const float dy = s.y() - screenPos.y();
+            const float d = std::sqrt(dx * dx + dy * dy);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                bestAxis = k;
+            }
+        }
+    }
+    return bestAxis;
+}
+
 void GLWidget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton)
     {
         m_lastMousePos = event->pos();
+
+        // === 先看是不是点在选中模型的旋转 Gizmo 上 ===
+        if (m_selectedIndex >= 0)
+        {
+            const int axis = pickGizmoAxis(event->pos());
+            if (axis >= 0)
+            {
+                m_activeGizmoAxis = axis;   // 开始绕该轴旋转（Phase 4 在 move 里算角度）
+                update();
+                qDebug() << "[Gizmo] press axis" << axis;
+                return;                     // 命中 Gizmo：不再走下面的拾取
+            }
+        }
 
         // === 步骤 3：点击拾取，遍历所有模型找最近命中 ===
         QVector3D dir;
@@ -741,8 +890,42 @@ void GLWidget::mouseMoveEvent(QMouseEvent *event)
         m_target += up    * delta.y() * worldPerPixel;
     }
 
-    //移动选中模型
-    if((event->buttons() & Qt::LeftButton) && m_selectedIndex != -1)
+    // 拖 Gizmo 旋转：把上一帧/这一帧的鼠标射线投影到"旋转平面"上，算绕轴夹角
+    if((event->buttons() & Qt::LeftButton) && m_activeGizmoAxis >= 0 && m_selectedIndex >= 0)
+    {
+        Model *model = m_models[m_selectedIndex].get();
+        const QVector3D axis   = m_gizmoAxes[m_activeGizmoAxis].axis;
+        const QVector3D center = model->position();
+
+        // 当前/上一帧的鼠标射线
+        QVector3D dirNow, dirPrev;
+        const QVector3D oNow  = screenToWorldRay(event->pos(),    dirNow);
+        const QVector3D oPrev = screenToWorldRay(m_lastMousePos, dirPrev);
+
+        // 射线与旋转平面（过 center、法线 axis）求交
+        const auto project = [&](const QVector3D &o, const QVector3D &d) -> QVector3D {
+            const float denom = QVector3D::dotProduct(axis, d);
+            if (std::abs(denom) < 1e-6f)
+                return center;   // 射线几乎平行于平面（环侧对着相机）：退化，返回中心
+            const float t = QVector3D::dotProduct(axis, center - o) / denom;
+            return o + t * d;
+        };
+        const QVector3D vPrev = project(oPrev, dirPrev) - center;
+        const QVector3D vNow  = project(oNow,  dirNow)  - center;
+
+        // 带符号夹角：cross 在 axis 上的投影定符号（右手定则），atan2 自动给出正负
+        const float crossZ = QVector3D::dotProduct(axis, QVector3D::crossProduct(vPrev, vNow));
+        const float dotVal = QVector3D::dotProduct(vPrev, vNow);
+        const float angleRad = std::atan2(crossZ, dotVal);
+
+        if (std::abs(angleRad) > 1e-5f)   // 鼠标真动了才转，避免抖动
+            model->rotateAroundWorldAxis(axis, qRadiansToDegrees(angleRad));
+
+        m_lastMousePos = event->pos();
+    }
+
+    //移动选中模型（拖 Gizmo 时不移动，留给旋转）
+    if((event->buttons() & Qt::LeftButton) && m_selectedIndex != -1 && m_activeGizmoAxis == -1)
     {
         const QPoint delta = event->pos() - m_lastMousePos;
         m_lastMousePos = event->pos();
@@ -765,6 +948,15 @@ void GLWidget::mouseMoveEvent(QMouseEvent *event)
 
 
     update();
+}
+
+void GLWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && m_activeGizmoAxis != -1)
+    {
+        m_activeGizmoAxis = -1;   // 松开：结束 Gizmo 拖拽
+        update();
+    }
 }
 
 void GLWidget::wheelEvent(QWheelEvent *event)
